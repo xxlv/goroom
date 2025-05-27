@@ -54,7 +54,7 @@ func (a *GinRouterAdapter) PathPrefix(path string) Router {
 }
 
 func (a *GinRouterAdapter) Handler(handler http.Handler) Router {
-	a.router.StaticFS("/", http.FS(staticFiles))
+	a.router.StaticFS("/static", http.FS(staticFiles))
 	return a
 }
 

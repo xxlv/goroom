@@ -485,10 +485,11 @@
           const roomID = urlParams.get("room") || "room1";
           const basePath = window.location.pathname
             .split("?")[0]
-            .replace("/static/", "/");
+            .replace("/static/", "/")
+            .replace(/\/$/, "");
 
           try {
-            this.eventSource = new EventSource(`${basePath}room/${roomID}`);
+            this.eventSource = new EventSource(`${basePath}/room/${roomID}`);
 
             this.eventSource.onopen = () => {
               this.setConnected(true);
