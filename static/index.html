@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSE Console</title>
+    <style>
+      body {
+        background-color: #1a1a1a;
+        color: #00ff00;
+        font-family: "Courier New", monospace;
+        margin: 0;
+        padding: 10px;
+        overflow: hidden;
+      }
+      #messages {
+        height: 100vh;
+        overflow-y: auto;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .message {
+        padding: 2px 0;
+        word-break: break-all;
+      }
+      .error {
+        color: #ff3333;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="messages"></div>
+
+    <script>
+      // 从 URL 参数获取 roomID
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomID = urlParams.get("room") || "room1"; // 默认 room1
+
+      // 动态获取基路径
+      const basePath = window.location.pathname.split("?")[0]; // e.g., "/events/"
+      const eventSource = new EventSource(`${basePath}room/${roomID}`);
+      const messagesDiv = document.getElementById("messages");
+
+      eventSource.onmessage = function (event) {
+        const msg = document.createElement("div");
+        msg.className = "message";
+        msg.textContent = event.data;
+        messagesDiv.appendChild(msg);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      };
+
+      eventSource.onerror = function () {
+        const msg = document.createElement("div");
+        msg.className = "error";
+        msg.textContent = "Connection lost, reconnecting...";
+        messagesDiv.appendChild(msg);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      };
+    </script>
+  </body>
+</html>
