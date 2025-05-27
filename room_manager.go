@@ -1,19 +1,40 @@
 package goroom
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
-// RoomManager 管理房间和客户端连接
+type LogLevel string
+
+const (
+	LogLevelInfo    LogLevel = "info"
+	LogLevelSuccess LogLevel = "success"
+	LogLevelWarning LogLevel = "warning"
+	LogLevelError   LogLevel = "error"
+	LogLevelDebug   LogLevel = "debug"
+)
+
+type LogMessage struct {
+	Level     LogLevel  `json:"level"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+func (lm *LogMessage) ToJSON() string {
+	data, _ := json.Marshal(lm)
+	return string(data)
+}
+
 type RoomManager struct {
 	rooms   map[string]chan string
 	clients map[string]map[*http.ResponseWriter]struct{}
 	mutex   sync.RWMutex
 }
 
-// NewRoomManager 创建一个新的 RoomManager
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
 		rooms:   make(map[string]chan string),
@@ -21,7 +42,6 @@ func NewRoomManager() *RoomManager {
 	}
 }
 
-// CreateRoom 创建或获取一个房间的消息通道
 func (rm *RoomManager) CreateRoom(roomID string) chan string {
 	rm.mutex.Lock()
 	defer rm.mutex.Unlock()
@@ -30,29 +50,62 @@ func (rm *RoomManager) CreateRoom(roomID string) chan string {
 		return ch
 	}
 
-	ch := make(chan string, 100) // 带缓冲的通道
+	ch := make(chan string, 100)
 	rm.rooms[roomID] = ch
 	rm.clients[roomID] = make(map[*http.ResponseWriter]struct{})
 	go rm.broadcast(roomID, ch)
 	return ch
 }
 
-// WriteToRoom 向指定房间写入消息
-func (rm *RoomManager) WriteToRoom(roomID, message string) bool {
+func (rm *RoomManager) WriteToRoomWithLevel(roomID, message string, level LogLevel) bool {
 	rm.mutex.RLock()
 	defer rm.mutex.RUnlock()
+
 	if ch, exists := rm.rooms[roomID]; exists {
+		logMsg := &LogMessage{
+			Level:     level,
+			Message:   message,
+			Timestamp: time.Now(),
+		}
+
 		select {
-		case ch <- message:
+		case ch <- logMsg.ToJSON():
 			return true
 		default:
-			return false // 通道已满
+			return false
 		}
 	}
-	return false // 房间不存在
+	return false
 }
 
-// broadcast 广播消息到房间内的所有客户端
+func (rm *RoomManager) WriteToRoom(roomID, message string) bool {
+	return rm.WriteToRoomWithLevel(roomID, message, LogLevelInfo)
+}
+func (rm *RoomManager) WriteFormattedToRoom(roomID string, level LogLevel, format string, args ...interface{}) bool {
+	message := fmt.Sprintf(format, args...)
+	return rm.WriteToRoomWithLevel(roomID, message, level)
+}
+
+func (rm *RoomManager) WriteInfof(roomID, format string, args ...interface{}) bool {
+	return rm.WriteFormattedToRoom(roomID, LogLevelInfo, format, args...)
+}
+
+func (rm *RoomManager) WriteSuccessf(roomID, format string, args ...interface{}) bool {
+	return rm.WriteFormattedToRoom(roomID, LogLevelSuccess, format, args...)
+}
+
+func (rm *RoomManager) WriteWarningf(roomID, format string, args ...interface{}) bool {
+	return rm.WriteFormattedToRoom(roomID, LogLevelWarning, format, args...)
+}
+
+func (rm *RoomManager) WriteErrorf(roomID, format string, args ...interface{}) bool {
+	return rm.WriteFormattedToRoom(roomID, LogLevelError, format, args...)
+}
+
+func (rm *RoomManager) WriteDebugf(roomID, format string, args ...interface{}) bool {
+	return rm.WriteFormattedToRoom(roomID, LogLevelDebug, format, args...)
+}
+
 func (rm *RoomManager) broadcast(roomID string, ch chan string) {
 	for msg := range ch {
 		rm.mutex.RLock()
@@ -66,7 +119,6 @@ func (rm *RoomManager) broadcast(roomID string, ch chan string) {
 	}
 }
 
-// addClient 添加客户端到房间
 func (rm *RoomManager) addClient(roomID string, w *http.ResponseWriter) {
 	rm.mutex.Lock()
 	defer rm.mutex.Unlock()
@@ -76,7 +128,6 @@ func (rm *RoomManager) addClient(roomID string, w *http.ResponseWriter) {
 	rm.clients[roomID][w] = struct{}{}
 }
 
-// removeClient 从房间移除客户端
 func (rm *RoomManager) removeClient(roomID string, w *http.ResponseWriter) {
 	rm.mutex.Lock()
 	defer rm.mutex.Unlock()
@@ -90,4 +141,15 @@ func (rm *RoomManager) removeClient(roomID string, w *http.ResponseWriter) {
 			}
 		}
 	}
+}
+
+func (rm *RoomManager) CloseRoom(roomID string) {
+	rm.mutex.Lock()
+	defer rm.mutex.Unlock()
+
+	if ch, exists := rm.rooms[roomID]; exists {
+		close(ch)
+		delete(rm.rooms, roomID)
+	}
+	delete(rm.clients, roomID)
 }

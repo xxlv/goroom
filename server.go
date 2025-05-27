@@ -12,13 +12,11 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
-// Server 封装 SSE 服务
 type Server struct {
 	manager *RoomManager
 	router  *mux.Router
 }
 
-// NewServer 创建一个新的 SSE 服务
 func NewServer() *Server {
 	manager := NewRoomManager()
 	router := mux.NewRouter()
@@ -37,40 +35,56 @@ func (s *Server) Mount(router *mux.Router, prefix string) {
 	router.PathPrefix(prefix).Handler(s.router)
 }
 
-// setupRoutes 配置 SSE 和静态文件路由
 func (s *Server) setupRoutes(prefix string) {
+	//prefix is  /events/
 	log.Println(prefix + "room/{roomID}")
 	s.router.HandleFunc(prefix+"room/{roomID}", s.handleSSE).Methods("GET")
 	s.router.HandleFunc(prefix+"send/{roomID}", s.handleSendMessage).Methods("POST")
 	s.router.PathPrefix(prefix).Handler(http.StripPrefix(prefix, http.FileServer(http.FS(staticFiles))))
 }
 
-// Start 启动独立 SSE 服务
 func (s *Server) Start(addr string) error {
 	return http.ListenAndServe(addr, s.router)
 }
 
-// WriteToRoom 向指定房间写入消息
 func (s *Server) WriteToRoom(roomID, message string) bool {
 	return s.manager.WriteToRoom(roomID, message)
 }
 
-// handleSSE 处理 SSE 连接
+func (s *Server) WriteInfof(roomID, format string, args ...interface{}) bool {
+	return s.manager.WriteInfof(roomID, format, args...)
+}
+func (s *Server) WriteSuccessf(roomID, format string, args ...interface{}) bool {
+	return s.manager.WriteSuccessf(roomID, format, args...)
+}
+
+func (s *Server) WriteWarningf(roomID, format string, args ...interface{}) bool {
+	return s.manager.WriteWarningf(roomID, format, args...)
+}
+func (s *Server) WriteErrorf(roomID, format string, args ...interface{}) bool {
+	return s.manager.WriteErrorf(roomID, format, args...)
+}
+
+func (s *Server) WriteDebugf(roomID, format string, args ...interface{}) bool {
+	return s.manager.WriteDebugf(roomID, format, args...)
+}
+
+func (s *Server) CloseRoom(roomID string) {
+	s.manager.CloseRoom(roomID)
+}
+
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	roomID := vars["roomID"]
 
-	// 设置 SSE 响应头
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// 创建或获取房间
 	s.manager.CreateRoom(roomID)
 	s.manager.addClient(roomID, &w)
 
-	// 保持连接直到客户端断开
 	<-r.Context().Done()
 	s.manager.removeClient(roomID, &w)
 }
@@ -90,7 +104,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	if s.manager.WriteToRoom(roomID, data.Message) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Message sent to room " + roomID))
+		_, _ = w.Write([]byte("Message sent to room " + roomID))
 	} else {
 		http.Error(w, "Room not found or channel full", http.StatusNotFound)
 	}
