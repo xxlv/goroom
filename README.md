@@ -14,6 +14,7 @@ GoRoom is a real-time log streaming server built with Go, providing a modern and
 - 🔄 Auto-scroll with manual control
 - 🎯 Room-based log separation
 - 💻 Cross-platform support
+- 🔌 Multiple router support (Gorilla Mux and Gin)
 
 ## Installation
 
@@ -22,6 +23,8 @@ go get github.com/xxlv/goroom
 ```
 
 ## Quick Start
+
+### Using Gorilla Mux
 
 ```go
 package main
@@ -54,6 +57,38 @@ func main() {
 }
 ```
 
+### Using Gin
+
+```go
+package main
+
+import (
+    "log"
+    "github.com/gin-gonic/gin"
+    "github.com/xxlv/goroom"
+)
+
+func main() {
+    router := gin.Default()
+    sseServer := goroom.NewServer()
+    sseServer.Mount(router, "/events")
+
+    // Example: Send logs to room1
+    go func() {
+        sseServer.WriteInfof("room1", "Application started")
+        sseServer.WriteSuccessf("room1", "Database connected successfully")
+        sseServer.WriteWarningf("room1", "High memory usage detected")
+        sseServer.WriteErrorf("room1", "Failed to process request")
+        sseServer.WriteDebugf("room1", "Processing request ID: %s", "12345")
+    }()
+
+    log.Println("Server starting on :8080")
+    if err := router.Run(":8080"); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
 ## Usage
 
 ### Server API
@@ -63,7 +98,7 @@ func main() {
 server := goroom.NewServer()
 
 // Mount the server to a router with a prefix
-server.Mount(router, "/events")
+server.Mount(router, "/events")  // Supports both mux.Router and gin.IRouter
 
 // Write logs to a room
 server.WriteInfof(roomID, format, args...)    // Info level
@@ -78,7 +113,7 @@ server.CloseRoom(roomID)
 
 ### Web Interface
 
-Access the web interface at `http://localhost:8080/events/static/` with an optional room parameter:
+Access the web interface at `http://localhost:8080/events/` with an optional room parameter:
 
 ```
 http://localhost:8080/events/?room=room1
