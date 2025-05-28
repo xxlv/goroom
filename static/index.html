@@ -485,7 +485,7 @@
           const roomID = urlParams.get("room") || "room1";
           const basePath = window.location.pathname
             .split("?")[0]
-            .replace("/static/", "/")
+            .replace("/static", "/")
             .replace(/\/$/, "");
 
           try {
@@ -580,7 +580,10 @@
 
           const msg = document.createElement("div");
           msg.className = `message ${logType}`;
-
+          try {
+            const parsedData = JSON.parse(data);
+            data = parsedData.message;
+          } catch (e) {}
           msg.innerHTML = `
             <div class="message-icon">${this.getLogIcon(logType)}</div>
             <div class="message-content">
@@ -591,12 +594,12 @@
               <div class="content">${data}</div>
             </div>
           `;
-
           return msg;
         }
 
         addMessage(data, type = null) {
           const msg = this.createMessageElement(data, type);
+          console.log(msg);
           this.messages.push({
             element: msg,
             type: type || this.getLogType(data),
