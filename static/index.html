@@ -412,7 +412,7 @@
           <div class="status-indicator"></div>
           Async Log
         </div>
-        <div class="connection-status">连接中...</div>
+        <div class="connection-status">Connecting...</div>
       </div>
       <div class="filters">
         <button class="filter-btn active" data-type="all">All</button>
@@ -503,7 +503,6 @@
               this.setConnected(false);
               this.addMessage("Connection lost, reconnecting...", "error");
 
-              // 尝试重新连接
               setTimeout(() => {
                 if (this.eventSource.readyState === EventSource.CLOSED) {
                   this.connectSSE();
@@ -612,7 +611,6 @@
             this.messagesDiv.scrollTop = this.messagesDiv.scrollHeight;
           }
 
-          // 添加入场动画
           msg.style.opacity = "0";
           msg.style.transform = "translateX(-20px)";
           requestAnimationFrame(() => {
