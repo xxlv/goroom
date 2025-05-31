@@ -68,6 +68,42 @@
         gap: 16px;
       }
 
+      .search-container {
+        position: relative;
+        margin-right: 16px;
+      }
+
+      .search-input {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 6px 12px;
+        padding-left: 32px;
+        border-radius: 6px;
+        font-size: 12px;
+        width: 200px;
+        transition: all 0.2s ease;
+      }
+
+      .search-input:focus {
+        outline: none;
+        border-color: var(--accent-info);
+        width: 250px;
+      }
+
+      .search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .search-input::placeholder {
+        color: var(--text-muted);
+      }
+
       .title {
         font-size: 14px;
         font-weight: 600;
@@ -111,6 +147,20 @@
         padding: 4px;
         border-radius: 8px;
         border: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+
+      .filter-section {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .filter-divider {
+        width: 1px;
+        height: 20px;
+        background: var(--border);
+        margin: 0 4px;
       }
 
       .filter-btn {
@@ -153,6 +203,41 @@
       }
       .filter-btn.active.debug {
         background: var(--accent-debug);
+      }
+
+      .tag-filter {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-light);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .tag-filter:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--accent-info);
+      }
+
+      .tag-filter.active {
+        background: var(--accent-info);
+        border-color: var(--accent-info);
+        color: white;
+      }
+
+      .tag-filter::after {
+        content: "×";
+        margin-left: 6px;
+        opacity: 0.7;
+        font-weight: bold;
+      }
+
+      .tag-filter.active::after {
+        opacity: 1;
       }
 
       #messages {
@@ -248,6 +333,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        flex-wrap: wrap;
       }
 
       .timestamp {
@@ -286,6 +372,33 @@
       .message.debug .log-level {
         background: var(--bg-debug);
         color: var(--accent-debug);
+      }
+
+      .message-tags {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+
+      .message-tag {
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-light);
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-transform: none;
+      }
+
+      .message-tag:hover {
+        background: var(--accent-info);
+        color: white;
+        border-color: var(--accent-info);
+        transform: translateY(-1px);
       }
 
       .content {
@@ -402,6 +515,15 @@
           bottom: 16px;
           right: 16px;
         }
+
+        .filters {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .filter-section {
+          flex-wrap: wrap;
+        }
       }
     </style>
   </head>
@@ -414,13 +536,25 @@
         </div>
         <div class="connection-status">Connecting...</div>
       </div>
+      <div class="search-container">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" placeholder="Search logs..." />
+      </div>
       <div class="filters">
-        <button class="filter-btn active" data-type="all">All</button>
-        <button class="filter-btn info" data-type="info">Info</button>
-        <button class="filter-btn success" data-type="success">Success</button>
-        <button class="filter-btn warning" data-type="warning">Warning</button>
-        <button class="filter-btn error" data-type="error">Error</button>
-        <button class="filter-btn debug" data-type="debug">Debug</button>
+        <div class="filter-section">
+          <button class="filter-btn active" data-type="all">All</button>
+          <button class="filter-btn info" data-type="info">Info</button>
+          <button class="filter-btn success" data-type="success">
+            Success
+          </button>
+          <button class="filter-btn warning" data-type="warning">
+            Warning
+          </button>
+          <button class="filter-btn error" data-type="error">Error</button>
+          <button class="filter-btn debug" data-type="debug">Debug</button>
+        </div>
+        <div class="filter-divider" id="tagDivider" style="display: none"></div>
+        <div class="filter-section" id="tagFilters"></div>
       </div>
     </div>
 
@@ -450,17 +584,24 @@
           this.autoScroll = true;
           this.messages = [];
           this.currentFilter = "all";
+          this.currentTagFilter = null;
+          this.availableTags = new Set();
           this.isConnected = false;
           this.eventSource = null;
+          this.searchQuery = "";
 
           this.messagesDiv = document.getElementById("messages");
           this.autoScrollBtn = document.getElementById("autoScroll");
           this.clearBtn = document.getElementById("clearLogs");
           this.loadingDiv = document.getElementById("loading");
           this.connectionStatus = document.querySelector(".connection-status");
+          this.tagFiltersDiv = document.getElementById("tagFilters");
+          this.tagDivider = document.getElementById("tagDivider");
+          this.searchInput = document.querySelector(".search-input");
 
           this.init();
           this.connectSSE();
+          this.addDemoMessages(); // 添加演示消息
         }
 
         init() {
@@ -478,6 +619,52 @@
 
           // Clear logs
           this.clearBtn.addEventListener("click", () => this.clearLogs());
+
+          // Search functionality
+          this.searchInput.addEventListener("input", (e) => {
+            this.searchQuery = e.target.value.toLowerCase();
+            this.applyCurrentFilter();
+          });
+        }
+
+        addDemoMessages() {
+          // 添加一些演示消息来展示功能
+          const demoMessages = [
+            {
+              message: "Application started successfully",
+              tags: ["app", "startup"],
+            },
+            {
+              message: "Database connection established",
+              tags: ["db", "connection"],
+            },
+            {
+              message: "Warning: High memory usage detected",
+              tags: ["memory", "performance"],
+            },
+            {
+              message: "User authentication failed",
+              tags: ["auth", "security"],
+            },
+            {
+              message: "Debug: Processing request #12345",
+              tags: ["debug", "request"],
+            },
+            {
+              message: "API call completed successfully",
+              tags: ["api", "success"],
+            },
+            {
+              message: "Error: Failed to save user data",
+              tags: ["error", "database", "user"],
+            },
+          ];
+
+          demoMessages.forEach((msg, index) => {
+            setTimeout(() => {
+              this.addMessage(JSON.stringify(msg));
+            }, index * 1000);
+          });
         }
 
         connectSSE() {
@@ -542,24 +729,18 @@
           if (
             lowerMsg.includes("error") ||
             lowerMsg.includes("failed") ||
-            lowerMsg.includes("failed")
+            lowerMsg.includes("fail")
           )
             return "error";
-          if (
-            lowerMsg.includes("warning") ||
-            lowerMsg.includes("warn") ||
-            lowerMsg.includes("warning")
-          )
+          if (lowerMsg.includes("warning") || lowerMsg.includes("warn"))
             return "warning";
           if (
             lowerMsg.includes("success") ||
             lowerMsg.includes("completed") ||
-            lowerMsg.includes("success") ||
-            lowerMsg.includes("completed")
+            lowerMsg.includes("established")
           )
             return "success";
-          if (lowerMsg.includes("debug") || lowerMsg.includes("debug"))
-            return "debug";
+          if (lowerMsg.includes("debug")) return "debug";
           return "info";
         }
 
@@ -574,15 +755,48 @@
           });
         }
 
+        parseMessage(data) {
+          try {
+            const parsed = JSON.parse(data);
+            return {
+              message: parsed.message || data,
+              tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+              level: parsed.level || null,
+            };
+          } catch (e) {
+            return {
+              message: data,
+              tags: [],
+              level: null,
+            };
+          }
+        }
+
         createMessageElement(data, type = null) {
-          const logType = type || this.getLogType(data);
+          const parsed = this.parseMessage(data);
+          const logType =
+            type || parsed.level || this.getLogType(parsed.message);
+
+          // 添加标签到可用标签集合
+          parsed.tags.forEach((tag) => this.availableTags.add(tag));
+          this.updateTagFilters();
 
           const msg = document.createElement("div");
           msg.className = `message ${logType}`;
-          try {
-            const parsedData = JSON.parse(data);
-            data = parsedData.message;
-          } catch (e) {}
+
+          // 创建标签HTML
+          const tagsHtml =
+            parsed.tags.length > 0
+              ? `<div class="message-tags">
+                ${parsed.tags
+                  .map(
+                    (tag) =>
+                      `<span class="message-tag" data-tag="${tag}">${tag}</span>`
+                  )
+                  .join("")}
+               </div>`
+              : "";
+
           msg.innerHTML = `
             <div class="message-icon">${this.getLogIcon(logType)}</div>
             <div class="message-content">
@@ -590,18 +804,31 @@
                 <span class="timestamp">${this.formatTimestamp()}</span>
                 <span class="log-level">${logType}</span>
               </div>
-              <div class="content">${data}</div>
+              ${tagsHtml}
+              <div class="content">${parsed.message}</div>
             </div>
           `;
-          return msg;
+
+          // 为标签添加点击事件
+          msg.querySelectorAll(".message-tag").forEach((tagEl) => {
+            tagEl.addEventListener("click", (e) => {
+              e.stopPropagation();
+              this.setTagFilter(tagEl.dataset.tag);
+            });
+          });
+
+          return { element: msg, tags: parsed.tags };
         }
 
         addMessage(data, type = null) {
-          const msg = this.createMessageElement(data, type);
-          console.log(msg);
+          const { element: msg, tags } = this.createMessageElement(data, type);
+          const logType =
+            type || this.getLogType(this.parseMessage(data).message);
+
           this.messages.push({
             element: msg,
-            type: type || this.getLogType(data),
+            type: logType,
+            tags: tags,
           });
 
           this.messagesDiv.appendChild(msg);
@@ -620,6 +847,47 @@
           });
         }
 
+        updateTagFilters() {
+          this.tagFiltersDiv.innerHTML = "";
+
+          if (this.availableTags.size === 0) {
+            this.tagDivider.style.display = "none";
+            return;
+          }
+
+          this.tagDivider.style.display = "block";
+
+          Array.from(this.availableTags)
+            .sort()
+            .forEach((tag) => {
+              const tagBtn = document.createElement("button");
+              tagBtn.className = `tag-filter ${
+                this.currentTagFilter === tag ? "active" : ""
+              }`;
+              tagBtn.textContent = tag;
+              tagBtn.addEventListener("click", () => {
+                if (this.currentTagFilter === tag) {
+                  this.clearTagFilter();
+                } else {
+                  this.setTagFilter(tag);
+                }
+              });
+              this.tagFiltersDiv.appendChild(tagBtn);
+            });
+        }
+
+        setTagFilter(tag) {
+          this.currentTagFilter = tag;
+          this.updateTagFilters();
+          this.applyCurrentFilter();
+        }
+
+        clearTagFilter() {
+          this.currentTagFilter = null;
+          this.updateTagFilters();
+          this.applyCurrentFilter();
+        }
+
         setFilter(type, btnElement) {
           this.currentFilter = type;
 
@@ -632,9 +900,15 @@
         }
 
         applyCurrentFilter() {
-          this.messages.forEach(({ element, type }) => {
-            const shouldShow =
+          this.messages.forEach(({ element, type, tags }) => {
+            const typeMatch =
               this.currentFilter === "all" || type === this.currentFilter;
+            const tagMatch =
+              !this.currentTagFilter || tags.includes(this.currentTagFilter);
+            const searchMatch =
+              !this.searchQuery ||
+              element.textContent.toLowerCase().includes(this.searchQuery);
+            const shouldShow = typeMatch && tagMatch && searchMatch;
             element.style.display = shouldShow ? "flex" : "none";
           });
         }
@@ -654,7 +928,10 @@
 
         clearLogs() {
           this.messages = [];
+          this.availableTags.clear();
+          this.currentTagFilter = null;
           this.messagesDiv.innerHTML = "";
+          this.updateTagFilters();
         }
 
         destroy() {
